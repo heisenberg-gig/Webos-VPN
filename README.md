@@ -16,7 +16,7 @@ Parte do projeto [webos-wireguard](https://github.com/RodriguezCF/webos-wireguar
 | Se a VPN cair | a TV fica a usar o teu IP real | **a internet é cortada** (kill switch) |
 | Trocar de servidor | corta e volta a ligar sem proteção pelo meio | **sem janela de fuga**: o bloqueio mantém-se durante a troca |
 | Início automático | liga depois do arranque | o **bloqueio carrega logo no arranque**, antes de a rede subir |
-| Interface | consola de texto | ecrã para TV, com diagrama do caminho da ligação, em português e inglês |
+| Interface | consola de texto | ecrã para TV, com **bandeiras dos países**, diagrama do caminho da ligação, em português e inglês |
 
 ## Como o kill switch funciona
 
@@ -114,7 +114,7 @@ As regras de firewall não sobrevivem a um reinício. Com o início automático 
 
 - 9 testes do importador e da página de envio (formato Mullvad, comentários, maiúsculas, chaves inválidas, ZIP, caminhos maliciosos, vários ficheiros por envio, sessão por código).
 - 56 verificações de ponta a ponta com **tráfego real** entre dois *network namespaces* (a "TV" e a "Internet"), com `iptables`, rotas, `mount` e `resolv.conf` verdadeiros. Entre elas: nada chega à Internet quando o túnel cai; durante uma troca de servidor, com sondas a cada 20 ms, **nenhum pacote saiu fora do túnel**; o DNS não vai em claro; tudo é restaurado ao desligar.
-- 32 verificações da interface num Chromium a 1920×1080: estados, foco do comando, tecla Voltar e vermelha, comandos enviados à TV.
+- 39 verificações da interface num Chromium a 1920×1080: estados, bandeiras, rolagem das definições, foco do comando, tecla Voltar e vermelha, comandos enviados à TV.
 
 **Não testado:**
 

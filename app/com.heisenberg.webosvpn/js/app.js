@@ -211,13 +211,13 @@
   function describe(p) {
     var m = /^([a-z]{2})-([a-z]{3})-wg-(\d+)/.exec(p.id);
     if (m) {
-      return { cc: m[1].toUpperCase(), city: CITIES[m[2]] || m[2].toUpperCase(), country: countryName(m[1]), num: m[3], sort: countryName(m[1]) + "|" + (CITIES[m[2]] || m[2]) + "|" + m[3] };
+      return { flag: true, cc: m[1].toUpperCase(), city: CITIES[m[2]] || m[2].toUpperCase(), country: countryName(m[1]), num: m[3], sort: countryName(m[1]) + "|" + (CITIES[m[2]] || m[2]) + "|" + m[3] };
     }
     m = /^(?:mullvad-)?([a-z]{2})(\d+)$/.exec(p.id);
     if (m) {
-      return { cc: m[1].toUpperCase(), city: countryName(m[1]), country: "", num: m[2], sort: countryName(m[1]) + "||" + m[2] };
+      return { flag: true, cc: m[1].toUpperCase(), city: countryName(m[1]), country: "", num: m[2], sort: countryName(m[1]) + "||" + m[2] };
     }
-    return { cc: (p.name || p.id).slice(0, 2).toUpperCase(), city: p.name || p.id, country: "", num: "", sort: "~" + (p.name || p.id) };
+    return { flag: false, cc: (p.name || p.id).slice(0, 2).toUpperCase(), city: p.name || p.id, country: "", num: "", sort: "~" + (p.name || p.id) };
   }
 
   function placeName(p) {
@@ -461,7 +461,9 @@
       var act = p.id === activeId;
       var tag = act ? (status === "connected" ? t("status_connected") : (status === "connecting" ? "…" : "")) : "";
       html += '<button class="card' + (act ? " active" : "") + (act && warn ? " warn" : "") + '" data-f data-id="' + esc(p.id) + '" role="listitem">' +
-        '<span class="cc">' + esc(d.cc) + "</span>" +
+        (d.flag
+          ? '<span class="flag"><img src="flags/' + d.cc.toLowerCase() + '.svg" alt="" onerror="this.parentNode.className=\'cc\';this.parentNode.textContent=\'' + d.cc + '\'"></span>'
+          : '<span class="cc">' + esc(d.cc) + "</span>") +
         '<span class="city">' + esc(d.city) + "</span>" +
         '<span class="meta">' + esc((d.country ? d.country + (d.num ? " · " : "") : "") + (d.num ? d.num : (d.country ? "" : p.endpoint))) + "</span>" +
         (tag ? '<span class="tag">' + esc(tag) + "</span>" : "") + "</button>";
@@ -768,7 +770,21 @@
     }
     if (!best) return;
     best.focus();
-    try { best.scrollIntoView({ block: "nearest", inline: "nearest" }); } catch (e) { best.scrollIntoView(false); }
+    ensureVisible(best);
+  }
+
+  // scrollIntoView would also scroll ancestors (and cut off titles); scroll only
+  // the list that contains the item, and snap to the very top/bottom at the ends.
+  function ensureVisible(el) {
+    var box = el.parentNode;
+    while (box && box !== document.body && !(box.classList && (box.classList.contains("grid") || box.classList.contains("rows")))) box = box.parentNode;
+    if (!box || box === document.body) return;
+    var br = box.getBoundingClientRect(), r = el.getBoundingClientRect(), pad = 28;
+    if (r.top < br.top + pad) box.scrollTop -= (br.top + pad - r.top);
+    else if (r.bottom > br.bottom - pad) box.scrollTop += (r.bottom - (br.bottom - pad));
+    var items = box.querySelectorAll("[data-f]");
+    if (items.length && items[0] === el) box.scrollTop = 0;
+    else if (items.length && items[items.length - 1] === el) box.scrollTop = box.scrollHeight;
   }
 
   document.addEventListener("keydown", function (e) {

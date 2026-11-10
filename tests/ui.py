@@ -116,11 +116,34 @@ def run(shots):
         page.evaluate("document.dispatchEvent(new KeyboardEvent('keydown',{keyCode:461,bubbles:true}))")
         check("Back with nothing open exits the app", page.evaluate("!!window.__backed"))
 
+        print("== flags ==")
+        cards = page.evaluate("[...document.querySelectorAll('#grid .card')].map(c=>({t:c.innerText,src:(c.querySelector('.flag img')||{}).src||'',w:(c.querySelector('.flag img')||{}).naturalWidth||0}))")
+        lis = [c for c in cards if "Lisboa" in c["t"]][0]
+        casa = [c for c in cards if "Casa do Zé" in c["t"]][0]
+        check("Lisboa card shows pt flag, loaded", lis["src"].endswith("flags/pt.svg") and lis["w"] > 0)
+        check("all country cards have a loaded flag", all(c["w"] > 0 for c in cards if c is not casa))
+        check("custom profile 'Casa do Zé' has no flag", casa["src"] == "")
+
         print("== settings ==")
         page.click("#btnSettings")
         page.wait_for_timeout(100)
         check("settings open, kill switch shown as on", page.get_attribute("#rowKs", "aria-checked") == "true")
         if shots: page.screenshot(path=str(SHOTS / "settings.png"))
+        def geo():
+            return page.evaluate("""(()=>{const d=document.querySelector('.drawer'),h=d.querySelector('h2').getBoundingClientRect(),
+              b=d.querySelector('.rows'),br=b.getBoundingClientRect(),it=[...b.querySelectorAll('[data-f]')],
+              f=it[0].getBoundingClientRect(),l=it[it.length-1].getBoundingClientRect();
+              return {h:[h.top,h.bottom],box:[br.top,br.bottom],first:[f.top,f.bottom],last:[l.top,l.bottom],vh:innerHeight}})()""")
+        page.focus("#rowKs")
+        for _ in range(12): page.keyboard.press("ArrowDown"); page.wait_for_timeout(30)
+        g = geo()
+        check("scrolled to bottom: last row fully visible, not clipped", g["last"][1] <= g["box"][1] + 1 and g["last"][1] <= g["vh"])
+        check("scrolled to bottom: title still visible", g["h"][0] >= 0)
+        for _ in range(12): page.keyboard.press("ArrowUp"); page.wait_for_timeout(30)
+        g = geo()
+        check("back at top: Kill switch row fully inside list", g["first"][0] >= g["box"][0] and g["first"][1] <= g["box"][1])
+        check("back at top: Definições title fully visible", g["h"][0] >= 0 and g["h"][1] <= g["box"][0])
+        if shots: page.screenshot(path=str(SHOTS / "settings-top-again.png"))
         page.click("#rowKs"); page.wait_for_timeout(150)
         check("toggling kill switch calls settings.sh set killswitch 0", any("settings.sh' set killswitch '0'" in c or "settings.sh set killswitch '0'" in c for c in page.evaluate("window.__cmds")))
         page.click("#rowDns"); page.wait_for_timeout(100)
