@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WebOS VPN</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+
+  <header class="top">
+    <div class="brand">WebOS VPN</div>
+    <nav class="top-actions">
+      <button class="ghost" data-f id="btnImport" data-i18n="addServers">Adicionar servidores</button>
+      <button class="ghost" data-f id="btnSettings" data-i18n="settings">Definições</button>
+    </nav>
+  </header>
+
+  <section class="hero" id="hero" data-state="loading" data-far="net">
+    <div class="hero-text">
+      <h1 id="headline">&nbsp;</h1>
+      <p id="subline" class="sub">&nbsp;</p>
+      <ul id="facts" class="facts"></ul>
+      <div class="hero-actions">
+        <button class="primary" data-f id="btnMain">&nbsp;</button>
+        <button class="secondary" data-f id="btnSecondary" hidden></button>
+      </div>
+    </div>
+
+    <svg class="path" viewBox="0 0 780 230" role="img" aria-labelledby="pathTitle">
+      <title id="pathTitle">Caminho da ligação</title>
+      <!-- near end: this TV -->
+      <g class="tv">
+        <rect x="14" y="70" width="128" height="80" rx="10" class="node-body"/>
+        <rect x="26" y="82" width="104" height="56" rx="4" class="node-screen"/>
+        <rect x="62" y="152" width="32" height="10" rx="3" class="node-body"/>
+        <text x="78" y="196" text-anchor="middle" id="nearLabel" class="node-label">Esta TV</text>
+      </g>
+      <!-- the wire -->
+      <line x1="150" y1="110" x2="630" y2="110" class="track"/>
+      <line x1="150" y1="110" x2="630" y2="110" class="live full"/>
+      <line x1="150" y1="110" x2="630" y2="110" class="flow full"/>
+      <line x1="150" y1="110" x2="396" y2="110" class="live cut"/>
+      <rect x="402" y="62" width="12" height="96" rx="6" class="barrier"/>
+      <!-- far end: server or open internet -->
+      <g class="far-server">
+        <rect x="640" y="62" width="126" height="44" rx="10" class="node-body"/>
+        <rect x="640" y="114" width="126" height="44" rx="10" class="node-body"/>
+        <circle cx="662" cy="84" r="5" class="led"/>
+        <circle cx="662" cy="136" r="5" class="led"/>
+      </g>
+      <g class="far-net">
+        <circle cx="703" cy="110" r="52" class="node-body globe"/>
+        <ellipse cx="703" cy="110" rx="22" ry="52" class="globe-line"/>
+        <line x1="651" y1="110" x2="755" y2="110" class="globe-line"/>
+      </g>
+      <text x="766" y="196" text-anchor="end" id="farLabel" class="node-label">Internet</text>
+    </svg>
+  </section>
+
+  <section class="servers" id="serversWrap">
+    <div class="servers-head">
+      <h2 id="serversTitle">Servidores</h2>
+      <span id="serversCount" class="count"></span>
+    </div>
+    <div id="grid" class="grid" role="list"></div>
+    <div id="empty" class="empty" hidden>
+      <p id="emptyText"></p>
+      <button class="primary" data-f id="btnEmptyAdd" data-i18n="addServers">Adicionar servidores</button>
+    </div>
+  </section>
+
+  <footer class="hints" id="hints">
+    <span><b>OK</b> <span data-i18n="hintConnect">ligar</span></span>
+    <span><b data-i18n="hintRedKey">Vermelho</b> <span data-i18n="hintRemove">remover servidor</span></span>
+    <span><b data-i18n="hintBack">Voltar</b> <span data-i18n="hintExit">sair</span></span>
+  </footer>
+</div>
+
+<div id="toast" class="toast" hidden role="status"></div>
+
+<!-- Add servers -->
+<div id="importModal" class="modal" hidden>
+  <div class="sheet">
+    <h2 data-i18n="importTitle">Adicionar servidores</h2>
+    <p class="lead" data-i18n="importLead">Abre este endereço num telemóvel ou computador ligado à mesma rede e envia os ficheiros .conf, ou o ZIP que a Mullvad gera.</p>
+    <div class="code-block">
+      <div><div class="k" data-i18n="address">Endereço</div><div id="importUrl" class="big-code">–</div></div>
+      <div><div class="k" data-i18n="code">Código</div><div id="importCode" class="big-code">–</div></div>
+    </div>
+    <p id="importStatus" class="sub"></p>
+    <div class="sheet-actions"><button class="primary" data-f id="btnImportDone" data-i18n="finish">Concluir</button></div>
+  </div>
+</div>
+
+<!-- Settings -->
+<div id="settingsModal" class="modal side" hidden>
+  <div class="drawer">
+    <h2 data-i18n="settings">Definições</h2>
+    <div class="rows">
+      <button class="row" data-f id="rowKs" role="switch">
+        <span class="row-text"><span class="row-title" data-i18n="ks">Kill switch</span><span class="row-desc" data-i18n="ksDesc"></span></span>
+        <span class="switch"><i></i></span>
+      </button>
+      <button class="row" data-f id="rowLan" role="switch">
+        <span class="row-text"><span class="row-title" data-i18n="lan">Permitir rede local</span><span class="row-desc" data-i18n="lanDesc"></span></span>
+        <span class="switch"><i></i></span>
+      </button>
+      <button class="row" data-f id="rowDns">
+        <span class="row-text"><span class="row-title" data-i18n="dns">DNS</span><span class="row-desc" id="dnsValue"></span></span>
+        <span class="chev">›</span>
+      </button>
+      <button class="row" data-f id="rowAuto" role="switch">
+        <span class="row-text"><span class="row-title" data-i18n="autostart">Ligar ao iniciar a TV</span><span class="row-desc" data-i18n="autostartDesc"></span></span>
+        <span class="switch"><i></i></span>
+      </button>
+      <button class="row" data-f id="rowLang">
+        <span class="row-text"><span class="row-title" data-i18n="language">Idioma</span><span class="row-desc" id="langValue"></span></span>
+        <span class="chev">›</span>
+      </button>
+      <button class="row" data-f id="rowDiag">
+        <span class="row-text"><span class="row-title" data-i18n="diag">Diagnóstico</span><span class="row-desc" data-i18n="diagDesc"></span></span>
+        <span class="chev">›</span>
+      </button>
+      <button class="row" data-f id="rowInstall">
+        <span class="row-text"><span class="row-title" data-i18n="install">Preparar ou atualizar a app</span><span class="row-desc" data-i18n="installDesc"></span></span>
+        <span class="chev">›</span>
+      </button>
+      <button class="row danger" data-f id="rowUninstall">
+        <span class="row-text"><span class="row-title" data-i18n="uninstall">Remover tudo</span><span class="row-desc" data-i18n="uninstallDesc"></span></span>
+        <span class="chev">›</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- DNS choice -->
+<div id="dnsModal" class="modal side" hidden>
+  <div class="drawer">
+    <h2 data-i18n="dns">DNS</h2>
+    <p class="lead small" data-i18n="dnsNote"></p>
+    <div class="rows" id="dnsRows"></div>
+    <div id="dnsCustomBox" class="custom-box" hidden>
+      <label for="dnsCustomInput" data-i18n="dnsCustomLabel">Endereços separados por vírgula</label>
+      <input id="dnsCustomInput" type="text" data-f placeholder="1.1.1.1, 9.9.9.9" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <button class="primary" data-f id="btnDnsCustomSave" data-i18n="save">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Test result / diagnostics / confirm -->
+<div id="infoModal" class="modal" hidden>
+  <div class="sheet wide">
+    <h2 id="infoTitle"></h2>
+    <div id="infoBody"></div>
+    <pre id="infoLog" class="log" hidden></pre>
+    <div class="sheet-actions"><button class="primary" data-f id="btnInfoClose" data-i18n="close">Fechar</button></div>
+  </div>
+</div>
+
+<div id="confirmModal" class="modal" hidden>
+  <div class="sheet">
+    <h2 id="confirmTitle"></h2>
+    <p class="lead" id="confirmText"></p>
+    <div class="sheet-actions">
+      <button class="secondary" data-f id="btnConfirmNo" data-i18n="cancel">Cancelar</button>
+      <button class="primary danger-fill" data-f id="btnConfirmYes"></button>
+    </div>
+  </div>
+</div>
+
+<script src="lib/webOSTVjs-1.2.4/webOSTV.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

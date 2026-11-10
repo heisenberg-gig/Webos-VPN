@@ -1,0 +1,14 @@
+#!/bin/sh
+# Test stand-in for `wg`. A handshake is "present" while $FAKE_DIR/handshake exists.
+case "$1" in
+  --version) echo "wg-stub" ;;
+  setconf) cp "$3" "$FAKE_DIR/setconf.last" ;;
+  show)
+    case "$3" in
+      latest-handshakes)
+        if [ -f "$FAKE_DIR/handshake" ]; then printf 'PUBKEY\t%s\n' "$(date +%s)"; else printf 'PUBKEY\t0\n'; fi ;;
+      transfer) printf 'PUBKEY\t123\t456\n' ;;
+      endpoints) printf 'PUBKEY\t%s\n' "$(sed -n 's/^Endpoint = //p' "$FAKE_DIR/setconf.last" | head -1)" ;;
+    esac ;;
+esac
+exit 0

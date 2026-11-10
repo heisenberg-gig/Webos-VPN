@@ -1,0 +1,6 @@
+#!/bin/sh
+# Test stand-in for wireguard-go: creates a TUN interface and waits.
+IFACE="$2"
+ip tuntap add dev "$IFACE" mode tun || exit 1
+trap 'ip link del "$IFACE" 2>/dev/null; exit 0' TERM INT
+while :; do sleep 1000 & wait $!; done
