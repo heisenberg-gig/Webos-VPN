@@ -15,6 +15,7 @@ valid_ip_list() { # "a,b" or "a b"
 apply_live() {
   id="$(cat "$DESIRED" 2>/dev/null || true)"
   [ -n "$id" ] || return 0
+  [ "$(get_setting autoreconnect 1)" = "1" ] && "$HERE/watchdog.sh" start >/dev/null 2>&1 || true
   [ -f "$PROFILES/$id/wg.conf" ] || return 0
   ip link show "$IFACE" >/dev/null 2>&1 || return 0
   KS="$(get_setting killswitch 1)"; LAN="$(get_setting lan 1)"
@@ -30,6 +31,7 @@ apply_live() {
 print_all() {
   echo "killswitch=$(get_setting killswitch 1)"
   echo "lan=$(get_setting lan 1)"
+  echo "autoreconnect=$(get_setting autoreconnect 1)"
   echo "dns_mode=$(get_setting dns_mode profile)"
   echo "dns_custom=$(get_setting dns_custom '')"
   echo "last_profile=$(get_setting last_profile '')"
@@ -40,7 +42,7 @@ case "${1:-get}" in
   set)
     key="${2:-}"; val="${3:-}"
     case "$key" in
-      killswitch|lan) case "$val" in 0|1) ;; *) echo "ERROR: value must be 0 or 1"; exit 2 ;; esac ;;
+      killswitch|lan|autoreconnect) case "$val" in 0|1) ;; *) echo "ERROR: value must be 0 or 1"; exit 2 ;; esac ;;
       dns_mode) case "$val" in profile|mullvad|ads|ads_trackers|ads_trackers_malware|custom) ;; *) echo "ERROR: invalid dns mode"; exit 2 ;; esac ;;
       dns_custom) valid_ip_list "$val" || { echo "ERROR: invalid DNS address list"; exit 2; } ; val="$(echo "$val" | tr ' ' ',')" ;;
       *) echo "ERROR: unknown setting"; exit 2 ;;

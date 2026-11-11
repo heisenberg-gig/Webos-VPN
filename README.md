@@ -16,6 +16,8 @@ Parte do projeto [webos-wireguard](https://github.com/RodriguezCF/webos-wireguar
 | Se a VPN cair | a TV fica a usar o teu IP real | **a internet é cortada** (kill switch) |
 | Trocar de servidor | corta e volta a ligar sem proteção pelo meio | **sem janela de fuga**: o bloqueio mantém-se durante a troca |
 | Início automático | liga depois do arranque | o **bloqueio carrega logo no arranque**, antes de a rede subir |
+| Se a ligação cair | fica à espera de ti | **religa sozinho** ao mesmo servidor (com o bloqueio mantido) |
+| Verificação | só manual | **teste automático de fugas** ao ligar: indicador verde/vermelho no canto |
 | Interface | consola de texto | ecrã para TV, com **bandeiras dos países**, diagrama do caminho da ligação, em português e inglês |
 
 ## Como o kill switch funciona
@@ -64,7 +66,7 @@ O ecrã diz-te sempre a verdade sobre o estado:
 1. Em mullvad.net → *Account* → *WireGuard configuration*, gera uma chave (ou usa a que já tens).
 2. Escolhe a plataforma **Linux**, seleciona os países, cidades ou servidores que queres e carrega em **Download zip archive**. Um servidor sozinho também serve (`.conf`).
 3. Na TV: **Adicionar servidores**. A TV mostra um endereço e um código.
-4. No telemóvel ou computador **na mesma rede**, abre esse endereço, introduz o código e envia o ZIP (ou vários `.conf`).
+4. No telemóvel ou computador **na mesma rede**, **lê o QR code** com a câmara (o código já vem preenchido), ou abre o endereço e escreve o código, e envia o ZIP (ou vários `.conf`).
 
 Os servidores aparecem na grelha, agrupados por país e cidade. A página fecha sozinha ao fim de 10 minutos ou após 5 códigos errados.
 
@@ -77,10 +79,29 @@ Os servidores aparecem na grelha, agrupados por país e cidade. A página fecha 
 | Ligar ou trocar de servidor | foca o cartão e prime **OK** |
 | Desligar (volta à ligação normal) | botão **Desligar** |
 | Remover um servidor | foca o cartão e prime a tecla **Vermelha** |
+| Marcar como favorito | foca o cartão e prime a tecla **Verde** (os favoritos aparecem primeiro) |
 | Ver o teu IP e se sais pela Mullvad | **Testar ligação** |
 | Escolher DNS, kill switch, início automático | **Definições** |
 
 Alterar o kill switch, a rede local ou o DNS **aplica-se logo** à ligação ativa, sem a reiniciar.
+
+### Indicador de estado e verificação de fugas
+
+O indicador no canto superior esquerdo está sempre visível:
+
+| Indicador | Significa |
+|---|---|
+| **Protegido** (verde) | o teste automático confirmou que sais pela Mullvad e o DNS é o da VPN |
+| **Possível fuga** (vermelho) | o teste diz que o tráfego não sai pela Mullvad, ou o DNS do sistema não é o da VPN |
+| **Ligado** (azul) | ligado, mas sem veredicto (servidor que não é Mullvad, ou a TV não consegue fazer o teste) |
+| **Bloqueado** / **A religar…** (âmbar) | sem VPN com a internet cortada pelo kill switch / a tentar voltar |
+| **Exposto** (vermelho) | sem VPN **e sem kill switch**: a TV usa o teu IP real |
+
+O teste corre sozinho ao ligar, depois de cada religação automática e de 10 em 10 minutos. Carrega no indicador para ver os detalhes. Ao **Desligar** com o kill switch ativo, a app pergunta antes, porque a internet normal volta a mostrar o teu IP real.
+
+### Religar automaticamente
+
+Se o túnel cair, um processo em segundo plano tenta voltar ao mesmo servidor, com pausas crescentes (5, 10, 20, 40, 60 s). O kill switch mantém a internet cortada durante as tentativas. Desligar por ti nunca religa. Podes desativar em **Definições**.
 
 ### DNS
 
@@ -113,8 +134,8 @@ As regras de firewall não sobrevivem a um reinício. Com o início automático 
 **Testado automaticamente neste repositório:**
 
 - 9 testes do importador e da página de envio (formato Mullvad, comentários, maiúsculas, chaves inválidas, ZIP, caminhos maliciosos, vários ficheiros por envio, sessão por código).
-- 56 verificações de ponta a ponta com **tráfego real** entre dois *network namespaces* (a "TV" e a "Internet"), com `iptables`, rotas, `mount` e `resolv.conf` verdadeiros. Entre elas: nada chega à Internet quando o túnel cai; durante uma troca de servidor, com sondas a cada 20 ms, **nenhum pacote saiu fora do túnel**; o DNS não vai em claro; tudo é restaurado ao desligar.
-- 39 verificações da interface num Chromium a 1920×1080: estados, bandeiras, rolagem das definições, foco do comando, tecla Voltar e vermelha, comandos enviados à TV.
+- 69 verificações de ponta a ponta com **tráfego real** entre dois *network namespaces* (a "TV" e a "Internet"), com `iptables`, rotas, `mount` e `resolv.conf` verdadeiros. Entre elas: nada chega à Internet quando o túnel cai; durante uma troca de servidor, com sondas a cada 20 ms, **nenhum pacote saiu fora do túnel**; o DNS não vai em claro; a reconexão automática volta sozinha **sem nenhum pacote fora do túnel** durante a queda; tudo é restaurado ao desligar.
+- 70 verificações da interface num Chromium a 1920×1080: estados, bandeiras, rolagem das definições, foco do comando, tecla Voltar e vermelha, comandos enviados à TV.
 
 **Não testado:**
 

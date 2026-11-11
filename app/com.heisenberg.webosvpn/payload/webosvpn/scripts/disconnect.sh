@@ -9,10 +9,20 @@ set -eu
 KEEP=0
 [ "${1:-}" = "--keep-block" ] && KEEP=1
 
+# stop the watchdog first, then wait (up to 30 s) for a reconnection already in progress
+"$HERE/watchdog.sh" stop || true
+w=0
+while [ -d "$OPERATION_LOCK" ] && [ "$w" -lt 30 ]; do
+  lp="$(cat "$OPERATION_LOCK/pid" 2>/dev/null || true)"
+  [ -n "$lp" ] && kill -0 "$lp" 2>/dev/null || break
+  sleep 1; w=$((w + 1))
+done
+
 acquire_lock
 trap 'rc=$?; release_lock; exit "$rc"' EXIT HUP INT TERM
 
 rm -f "$DESIRED"
+"$HERE/watchdog.sh" stop || true
 
 echo "== stopping tunnel =="
 tunnel_down

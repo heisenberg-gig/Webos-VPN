@@ -101,6 +101,7 @@ $("send").onclick=function(){
  }).catch(function(){line("err",t("net"));$("send").disabled=false})};
 $("done").onclick=function(){fetch("/done",{method:"POST",credentials:"same-origin"}).then(function(){$("res").innerHTML="";line("ok",t("closed"));$("done").classList.add("hide");$("send").classList.add("hide");$("drop").classList.add("hide")})};
 setLang(lang);
+(function(){var m=/[?&]c=([0-9a-fA-F]{1,8})/.exec(location.search);if(m){$("code").value=m[1];try{history.replaceState(null,"",location.pathname)}catch(e){}}})();
 </script>
 </body>
 </html>`

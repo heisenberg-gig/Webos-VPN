@@ -69,6 +69,8 @@ CONF
 mk pt-lis-wg-001 203.0.113.50
 mk de-fra-wg-002 203.0.113.51
 "$T/bin/wgtv" import "$T/pt-lis-wg-001.conf" "$T/de-fra-wg-002.conf" >/dev/null
+S settings.sh set autoreconnect 0 >/dev/null   # sections 1-11 test the drop behaviour itself
+export WGTV_WD_INTERVAL=1
 
 echo "== 1. connect to profile A with the kill switch on (default) =="
 S connect.sh pt-lis-wg-001 >"$T/c1.log" 2>&1; rc=$?
@@ -183,8 +185,42 @@ S disconnect.sh >/dev/null 2>&1
 S profiles.sh delete de-fra-wg-002 >/dev/null 2>&1
 check "delete removes it" '[ "$(S profiles.sh list | grep -c ^PROFILE)" = 1 ]'
 check "path traversal refused" '! S profiles.sh delete ../conf >/dev/null 2>&1'
+S profiles.sh fav pt-lis-wg-001 >/dev/null
+check "favorite is listed" 'S profiles.sh list | grep -q "^FAV.pt-lis-wg-001$"'
+check "favorite of a missing profile refused" '! S profiles.sh fav nope >/dev/null 2>&1'
+S profiles.sh fav pt-lis-wg-001 >/dev/null
+check "second fav toggles it off" '! S profiles.sh list | grep -q "^FAV"'
+S profiles.sh fav pt-lis-wg-001 >/dev/null
 
-echo "== 12. uninstall =="
+echo "== 12. automatic reconnection =="
+S settings.sh set autoreconnect 1 >/dev/null
+S connect.sh pt-lis-wg-001 >"$T/c5.log" 2>&1
+check "connected, watchdog running" '[ "$(sv status)" = connected ] && kill -0 "$(cat $T/base/run/watchdog.pid)"'
+before_inet=$(count inet)
+( for i in $(seq 1 450); do send 203.0.113.9 9999; sleep 0.02; done ) & PROBE=$!
+TV sh -c "kill \$(cat $T/base/run/wireguard-go.pid); sleep 0.5; ip link del wgtv0 2>/dev/null; true"
+check "the drop is seen as blocked" '[ "$(sv status)" = dropped_blocked ]'
+i=0; while [ "$i" -lt 40 ] && [ "$(sv status)" != connected ]; do sleep 1; i=$((i + 1)); done
+wait $PROBE 2>/dev/null
+check "reconnected on its own to the same profile" '[ "$(sv status)" = connected ] && [ "$(sv profile)" = pt-lis-wg-001 ]'
+check "reconnection counted" '[ "$(sv wd_count)" -ge 1 ]'
+check "nothing leaked while it was down and reconnecting" '[ "$(count inet)" = "$before_inet" ]'
+check "watchdog reports watching again" '[ "$(sv wd_state)" = watching ]'
+S disconnect.sh >/dev/null 2>&1
+sleep 3
+check "intentional disconnect stays disconnected" '[ "$(sv status)" = disconnected ] && ! TV ip link show wgtv0 >/dev/null 2>&1'
+check "watchdog gone after disconnect" '[ ! -f "$T/base/run/watchdog.pid" ] && ! pgrep -f "watchdog.sh run" >/dev/null'
+S settings.sh set autoreconnect 0 >/dev/null
+S connect.sh pt-lis-wg-001 >/dev/null 2>&1
+TV sh -c "kill \$(cat $T/base/run/wireguard-go.pid); sleep 0.5; ip link del wgtv0 2>/dev/null; true"
+sleep 6
+check "setting off: no automatic reconnection" '[ "$(sv status)" = dropped_blocked ]'
+S settings.sh set autoreconnect 1 >/dev/null
+i=0; while [ "$i" -lt 40 ] && [ "$(sv status)" != connected ]; do sleep 1; i=$((i + 1)); done
+check "turning it back on reconnects" '[ "$(sv status)" = connected ]'
+S disconnect.sh >/dev/null 2>&1
+
+echo "== 13. uninstall =="
 S uninstall.sh >/dev/null 2>&1
 check "state dir (with private keys) removed" '[ ! -e "$T/base" ]'
 

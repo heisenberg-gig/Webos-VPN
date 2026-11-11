@@ -14,17 +14,19 @@ IDS = [("pt-lis-wg-001", "pt-lis-wg-001"), ("pt-lis-wg-002", "pt-lis-wg-002"), (
        ("ch-zrh-wg-006", "ch-zrh-wg-006"), ("us-nyc-wg-007", "us-nyc-wg-007"), ("gb-lon-wg-008", "gb-lon-wg-008"),
        ("fr-par-wg-009", "fr-par-wg-009"), ("no-osl-wg-010", "no-osl-wg-010"), ("casa", "Casa do Zé")]
 
-def snapshot(status, profile="", ks="1", autostart="1", profiles=True, last="pt-lis-wg-001", dns_mode="profile"):
+def snapshot(status, profile="", ks="1", autostart="1", profiles=True, last="pt-lis-wg-001", dns_mode="profile", wd_state="watching", wd_count="0", favs=(), autoreconnect="1"):
     st = {"status": status, "profile": profile, "profile_name": profile, "iface": "up" if status in ("connected", "nohandshake", "stale") else "down",
           "handshake_age": "12" if status == "connected" else ("-1" if status == "nohandshake" else "300"),
           "rx": "5342211", "tx": "801233", "endpoint": "193.32.127.66:51820",
           "ks_active": "0" if status in ("dropped_exposed", "disconnected") else "1", "autostart": autostart,
-          "dns_applied": "10.64.0.1" if status in ("connected", "stale", "nohandshake") else "", "dns_method": "bind"}
+          "dns_applied": "10.64.0.1" if status in ("connected", "stale", "nohandshake") else "", "dns_method": "bind", "wd_state": wd_state, "wd_count": wd_count}
     out = "\n".join(f"{k}={v}" for k, v in st.items()) + "\n#PROFILES\n"
     if profiles:
         for i, n in IDS:
             out += f"PROFILE\t{i}\t{n}\t193.32.127.66:51820\t10.64.0.1\n"
-    out += f"LAST={last}\n#SETTINGS\nkillswitch={ks}\nlan=1\ndns_mode={dns_mode}\ndns_custom=\nlast_profile={last}\n"
+    for f in favs:
+        out += f"FAV\t{f}\n"
+    out += f"LAST={last}\n#SETTINGS\nkillswitch={ks}\nlan=1\nautoreconnect={autoreconnect}\ndns_mode={dns_mode}\ndns_custom=\nlast_profile={last}\n"
     return out
 
 MOCK = """
@@ -36,6 +38,9 @@ window.webOS = {platformBack: function(){ window.__backed = true; }, service: {r
   setTimeout(function(){ o.onSuccess({stdoutString: out + "\\nWGTV_RC=0\\n", stderrString: ""}); }, 5);
 }}};
 window.__reply = function(c){
+  var fm = /profiles\.sh'? fav '([^']+)'/.exec(c);
+  if (fm) { var line = "FAV\\t" + fm[1] + "\\n", sc = window.__scene;
+    window.__scene = sc.indexOf(line) >= 0 ? sc.replace(line, "") : sc.replace("LAST=", line + "LAST="); return "OK"; }
   if (c.indexOf('#PROFILES') !== -1) return window.__scene;
   if (c.indexOf('upload-start.sh') !== -1) return "Upload server started\\nURL: http://192.168.1.50:8088\\nCODE: a1b2c3d4";
   if (c.indexOf('check.sh') !== -1) return '{"ip":"193.32.127.66","country":"Portugal","city":"Lisbon","mullvad_exit_ip":true,"mullvad_exit_ip_hostname":"pt-lis-wg-001"}\\n#DNS\\n10.64.0.1 ';
@@ -165,6 +170,106 @@ def run(shots):
         if shots: page.screenshot(path=str(SHOTS / "import.png"))
         page.click("#btnImportDone"); page.wait_for_timeout(100)
         check("finishing stops the upload server", any("upload-stop.sh" in c for c in page.evaluate("window.__cmds")))
+        page.close()
+
+        print("== status chip + leak check ==")
+        def chip(page): return page.inner_text("#chipText"), page.get_attribute("#chip", "data-tone")
+        for name, want in [("connected", ("Protegido", "ok")), ("dropped_blocked", ("Bloqueado", "warn")),
+                           ("dropped_exposed", ("Exposto", "bad")), ("disconnected", ("Sem VPN", "idle"))]:
+            page = open_scene(scenes[name])
+            check(f"chip in {name}: {want[0]}", chip(page) == want)
+            page.close()
+        page = open_scene(scenes["setup"]); check("chip hidden before setup", page.locator("#chip").get_attribute("hidden") is not None); page.close()
+
+        page = open_scene(scenes["connected"])
+        check("leak check ran by itself on start", any("check.sh" in c for c in page.evaluate("window.__cmds")))
+        check("verified IP shown with a tick", "193.32.127.66 ✓" in page.inner_text("#facts"))
+        page.evaluate("document.getElementById('grid').scrollTop = 600")
+        check("chip stays visible after scrolling the grid", page.locator("#chip").is_visible() and page.evaluate("document.getElementById('chip').getBoundingClientRect().top") >= 0)
+        page.close()
+
+        def leak_page(reply_js, scene=None, lang="pt"):
+            pg = ctx.new_page()
+            pg.on("pageerror", lambda e: errors.append(str(e)))
+            pg.add_init_script(MOCK + f"window.__scene = {json.dumps(scene or scenes['connected'])}; localStorage.setItem('wgtvLang','{lang}');" + reply_js)
+            pg.goto("file://" + str(APP / "index.html")); pg.wait_for_timeout(450); return pg
+        page = leak_page("var _r = window.__reply; window.__reply = function(c){ if (c.indexOf('check.sh')!==-1) return '{\"ip\":\"85.1.2.3\",\"country\":\"Portugal\",\"mullvad_exit_ip\":false}\\n#DNS\\n10.64.0.1 '; return _r(c); };")
+        check("not exiting through Mullvad: red chip 'Possível fuga'", chip(page) == ("Possível fuga", "bad"))
+        check("leak explained on the main screen", "não sai pela Mullvad" in page.inner_text("#subline"))
+        if shots: page.screenshot(path=str(SHOTS / "leak.png"))
+        page.close()
+        page = leak_page("var _r = window.__reply; window.__reply = function(c){ if (c.indexOf('check.sh')!==-1) return '{\"ip\":\"193.32.127.66\",\"mullvad_exit_ip\":true}\\n#DNS\\n192.168.1.1 '; return _r(c); };")
+        check("system DNS outside the tunnel: red chip", chip(page)[1] == "bad" and "DNS" in page.inner_text("#subline"))
+        page.close()
+        page = leak_page("var _r = window.__reply; window.__reply = function(c){ if (c.indexOf('check.sh')!==-1) return 'curl: not found'; return _r(c); };")
+        page.wait_for_timeout(9000)
+        check("check unavailable: neutral 'Ligado', not a false alarm", chip(page) == ("Ligado", "info"))
+        page.close()
+
+        print("== auto reconnect ==")
+        page = open_scene(snapshot("dropped_blocked", "pt-lis-wg-001", wd_state="retrying"))
+        check("retrying: chip 'A religar…' + explanation", chip(page)[0] == "A religar…" and "automaticamente" in page.inner_text("#subline"))
+        if shots: page.screenshot(path=str(SHOTS / "retrying.png"))
+        page.close()
+        page = open_scene(snapshot("dropped_blocked", "pt-lis-wg-001", wd_state="retrying", autoreconnect="0"))
+        check("auto reconnect off: plain 'Bloqueado'", chip(page)[0] == "Bloqueado")
+        page.close()
+        page = open_scene(scenes["connected"])
+        page.click("#btnSettings"); page.wait_for_timeout(100)
+        check("settings shows auto reconnect on", page.get_attribute("#rowRec", "aria-checked") == "true")
+        page.click("#rowRec"); page.wait_for_timeout(150)
+        check("toggle sends settings.sh set autoreconnect 0", any("set autoreconnect '0'" in c for c in page.evaluate("window.__cmds")))
+        page.close()
+
+        print("== disconnect confirmation ==")
+        page = open_scene(scenes["connected"])
+        page.click("#btnMain"); page.wait_for_timeout(100)
+        check("Disconnect with kill switch asks first", page.locator("#confirmModal").get_attribute("hidden") is None and "IP real" in page.inner_text("#confirmText"))
+        check("nothing was sent yet", not any("disconnect.sh" in c for c in page.evaluate("window.__cmds")))
+        check("focus starts on Cancel (safe default)", page.evaluate("document.activeElement.id") == "btnConfirmNo")
+        if shots: page.screenshot(path=str(SHOTS / "confirm-disconnect.png"))
+        page.click("#btnConfirmNo"); page.wait_for_timeout(100)
+        check("Cancel keeps the VPN on", not any("disconnect.sh" in c for c in page.evaluate("window.__cmds")))
+        page.click("#btnMain"); page.click("#btnConfirmYes"); page.wait_for_timeout(150)
+        check("confirming runs disconnect.sh", any("disconnect.sh" in c for c in page.evaluate("window.__cmds")))
+        page.close()
+        page = open_scene(scenes["dropped_exposed"])
+        page.click("#btnSecondary"); page.wait_for_timeout(120)
+        check("kill switch off: no question, disconnects directly", page.locator("#confirmModal").get_attribute("hidden") is not None and any("disconnect.sh" in c for c in page.evaluate("window.__cmds")))
+        page.close()
+        page = open_scene(snapshot("blocked", ""))
+        page.click("#btnMain"); page.wait_for_timeout(100)
+        check("unblocking also asks", "Desbloquear" in page.inner_text("#confirmTitle"))
+        page.close()
+
+        print("== favorites ==")
+        page = open_scene(snapshot("disconnected", favs=("no-osl-wg-010", "es-mad-wg-001")))
+        names = page.evaluate("[...document.querySelectorAll('#grid .card')].map(c=>c.getAttribute('data-id'))")
+        check("favorites come first", set(names[:2]) == {"no-osl-wg-010", "es-mad-wg-001"})
+        check("favorite cards show a filled star", page.locator(".card.fav .star").first.inner_text() == "★" and page.locator(".card.fav").count() == 2)
+        check("group headings separate favorites from the rest", page.locator(".group").count() == 2 and "Favoritos" in page.inner_text("#grid"))
+        page.locator('.card[data-id="de-fra-wg-003"]').focus()
+        page.evaluate("document.dispatchEvent(new KeyboardEvent('keydown',{keyCode:404,bubbles:true}))"); page.wait_for_timeout(150)
+        check("green key sends profiles.sh fav", any("profiles.sh' fav 'de-fra-wg-003'" in c or "profiles.sh fav 'de-fra-wg-003'" in c for c in page.evaluate("window.__cmds")))
+        check("card becomes a favorite at once and keeps focus", page.locator('.card.fav[data-id="de-fra-wg-003"]').count() == 1 and page.evaluate("document.activeElement.getAttribute('data-id')") == "de-fra-wg-003")
+        if shots: page.screenshot(path=str(SHOTS / "favorites.png"))
+        page.close()
+        page = open_scene(scenes["disconnected"])
+        check("no favorites: no group headings", page.locator(".group").count() == 0)
+        page.close()
+
+        print("== QR code ==")
+        page = open_scene(scenes["disconnected"])
+        page.click("#btnImport"); page.wait_for_timeout(250)
+        check("QR drawn in the import dialog", page.locator("#importQr svg").count() == 1)
+        page.locator("#importQr").screenshot(path=str(SHOTS / "qr.png"))
+        try:
+            import cv2
+            im = cv2.imread(str(SHOTS / "qr.png")); im = cv2.resize(im, None, fx=2, fy=2, interpolation=cv2.INTER_NEAREST)
+            data, _, _ = cv2.QRCodeDetector().detectAndDecode(im)
+            check("QR decodes to the upload link with the code", data == "http://192.168.1.50:8088/?c=a1b2c3d4")
+        except ImportError:
+            print("  skip QR decode (no opencv)")
         page.close()
 
         print("== english ==")

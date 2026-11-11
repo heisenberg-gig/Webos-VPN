@@ -20,3 +20,7 @@ cbd7b91dbca4017d7defb25ebf1ff5abb63addf1495908e1c98802ef55ce5ebc  bin/wireguard-
 ## flag-icons 7.2.3
 
 Bandeiras SVG em `app/com.heisenberg.webosvpn/flags/`. Licença MIT, Copyright (c) 2013 Panayiotis Lipiridis (ver `flags/LICENSE.txt`). https://github.com/lipis/flag-icons
+
+## qrcode-generator 1.4.4
+
+Gerador de QR code em `app/com.heisenberg.webosvpn/lib/qrcode.js`. Licença MIT, Copyright (c) 2009 Kazuhiko Arase. https://github.com/kazuhikoarase/qrcode-generator

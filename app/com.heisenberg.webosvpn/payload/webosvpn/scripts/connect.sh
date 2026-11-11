@@ -41,6 +41,7 @@ DNS_FIRST="${DNS_LIST%% *}"
 
 set_state "connecting"
 echo "$ID" > "$DESIRED"
+"$HERE/watchdog.sh" start || true
 echo "== profile: $ID =="
 
 # -- 1. original default route (never the tunnel itself) -----------------------

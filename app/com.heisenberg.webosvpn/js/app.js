@@ -12,7 +12,8 @@
     pt: {
       addServers: "Adicionar servidores", settings: "Definições",
       hintConnect: "ligar", hintRedKey: "Vermelho", hintRemove: "remover servidor",
-      hintBack: "Voltar", hintExit: "sair",
+      hintBack: "Voltar", hintExit: "sair", hintGreen: "Verde", hintFav: "favorito",
+      favorites: "Favoritos", allServers: "Todos os servidores",
       servers: "Servidores",
       emptyServers: "Ainda não há servidores. Carrega um ficheiro .conf ou o ZIP da Mullvad.",
       importTitle: "Adicionar servidores",
@@ -22,6 +23,21 @@
       importCount: "{n} servidores na TV",
       importCountOne: "1 servidor na TV",
       importFailed: "Não foi possível abrir o envio.",
+      qrHint: "Aponta a câmara do telemóvel",
+      rec: "Religar automaticamente",
+      recDesc: "Se a ligação cair, tenta voltar ao mesmo servidor. O bloqueio mantém-se enquanto isso.",
+      confirmDisconnectTitle: "Desligar a VPN?",
+      confirmUnblockTitle: "Desbloquear a internet?",
+      confirmDisconnectText: "A internet normal volta a usar o teu IP real.",
+      chipProtected: "Protegido", chipChecking: "A verificar…", chipLeak: "Possível fuga", chipConnected: "Ligado",
+      chipConnecting: "A ligar…", chipNoReply: "Sem resposta", chipBlocked: "Bloqueado", chipRetrying: "A religar…",
+      chipExposed: "Exposto", chipOff: "Sem VPN",
+      factIp: "IP", sub_retrying: "A tentar voltar ao servidor automaticamente. A internet continua bloqueada.",
+      sub_retrying_exposed: "A tentar voltar ao servidor automaticamente. Ativa o kill switch nas definições.",
+      sub_leak_ip: "O teste indica que o tráfego não sai pela Mullvad. Desliga e tenta outro servidor.",
+      sub_leak_dns: "O DNS do sistema não é o da VPN. Desliga e liga de novo, ou vê o diagnóstico.",
+      reconnectedAuto: "Ligação restabelecida automaticamente.",
+      favAdded: "Adicionado aos favoritos.", favRemoved: "Removido dos favoritos.",
       ks: "Kill switch",
       ksDesc: "Se a VPN cair ou mudares de servidor, a internet fica cortada em vez de usar o teu IP real.",
       lan: "Permitir rede local",
@@ -88,7 +104,8 @@
     en: {
       addServers: "Add servers", settings: "Settings",
       hintConnect: "connect", hintRedKey: "Red", hintRemove: "remove server",
-      hintBack: "Back", hintExit: "exit",
+      hintBack: "Back", hintExit: "exit", hintGreen: "Green", hintFav: "favorite",
+      favorites: "Favorites", allServers: "All servers",
       servers: "Servers",
       emptyServers: "No servers yet. Upload a .conf file or the Mullvad ZIP.",
       importTitle: "Add servers",
@@ -98,6 +115,21 @@
       importCount: "{n} servers on the TV",
       importCountOne: "1 server on the TV",
       importFailed: "Could not open the upload page.",
+      qrHint: "Point your phone's camera here",
+      rec: "Reconnect automatically",
+      recDesc: "If the connection drops, tries to return to the same server. The block stays in place meanwhile.",
+      confirmDisconnectTitle: "Turn off the VPN?",
+      confirmUnblockTitle: "Unblock the Internet?",
+      confirmDisconnectText: "Normal Internet will use your real IP again.",
+      chipProtected: "Protected", chipChecking: "Checking…", chipLeak: "Possible leak", chipConnected: "Connected",
+      chipConnecting: "Connecting…", chipNoReply: "No reply", chipBlocked: "Blocked", chipRetrying: "Reconnecting…",
+      chipExposed: "Exposed", chipOff: "No VPN",
+      factIp: "IP", sub_retrying: "Trying to get back to the server automatically. The Internet stays blocked.",
+      sub_retrying_exposed: "Trying to get back to the server automatically. Turn on the kill switch in Settings.",
+      sub_leak_ip: "The test says traffic is not leaving through Mullvad. Disconnect and try another server.",
+      sub_leak_dns: "The system DNS is not the VPN's. Disconnect and connect again, or check Diagnostics.",
+      reconnectedAuto: "Connection restored automatically.",
+      favAdded: "Added to favorites.", favRemoved: "Removed from favorites.",
       ks: "Kill switch",
       ksDesc: "If the VPN drops or you switch servers, the Internet is cut instead of using your real IP.",
       lan: "Allow local network",
@@ -278,7 +310,10 @@
     st: { status: "loading" },
     profiles: [],
     last: "",
-    settings: { killswitch: "1", lan: "1", dns_mode: "profile", dns_custom: "", last_profile: "" },
+    favs: [],
+    leak: { state: "none", key: "", at: 0, running: false, ip: "", why: "" },
+    lastWd: null,
+    settings: { killswitch: "1", lan: "1", autoreconnect: "1", dns_mode: "profile", dns_custom: "", last_profile: "" },
     busy: null,          // "connecting" | "working" | null
     busyProfile: "",
     sig: ""
@@ -299,15 +334,16 @@
     if (parts[0].indexOf("#MISSING") !== -1) return null;
     var st = parseKV(parts[0]);
     var rest = (parts[1] || "").split("#SETTINGS");
-    var profiles = [], last = "";
+    var profiles = [], last = "", favs = [];
     var lines = rest[0].split("\n");
     for (var i = 0; i < lines.length; i++) {
       var f = lines[i].split("\t");
       if (f[0] === "PROFILE" && f[1]) profiles.push({ id: f[1], name: f[2] || f[1], endpoint: f[3] || "", dns: f[4] || "" });
+      else if (f[0] === "FAV" && f[1]) favs.push(f[1]);
       else if (lines[i].indexOf("LAST=") === 0) last = lines[i].slice(5);
     }
     profiles.sort(function (a, b) { return describe(a).sort < describe(b).sort ? -1 : 1; });
-    return { st: st, profiles: profiles, last: last, settings: parseKV(rest[1] || "") };
+    return { st: st, profiles: profiles, last: last, favs: favs, settings: parseKV(rest[1] || "") };
   }
 
   var SNAP_CMD =
@@ -326,7 +362,10 @@
         if (!snap) { S.installed = false; S.st = { status: "setup" }; }
         else {
           S.installed = true;
-          S.st = snap.st; S.profiles = snap.profiles; S.last = snap.last;
+          var prevWd = S.lastWd;
+          S.st = snap.st; S.profiles = snap.profiles; S.last = snap.last; S.favs = snap.favs;
+          S.lastWd = Number(snap.st.wd_count || 0);
+          if (prevWd !== null && S.lastWd > prevWd) showToast(t("reconnectedAuto"), true);
           for (var k in snap.settings) if (snap.settings.hasOwnProperty(k)) S.settings[k] = snap.settings[k];
         }
       } else if (S.installed === null) {
@@ -334,6 +373,7 @@
         showToast(out, false);
       }
       render();
+      maybeLeakCheck();
       if (cb) cb();
     }, 15000);
   }
@@ -348,6 +388,8 @@
     if (S.busy === "connecting") return "connecting";
     return S.st.status || "loading";
   }
+
+  function retrying() { return S.settings.autoreconnect === "1" && S.st.wd_state === "retrying"; }
 
   function hero() {
     var status = effectiveStatus();
@@ -365,22 +407,22 @@
       case "setup": v.sub = t("sub_setup"); v.main = t("prepare"); v.mainAct = "install"; break;
       case "loading": break;
       case "connected":
-        v.sub = t("sub_connected", { name: name });
+        v.sub = S.leak.state === "leak" ? t(S.leak.why === "dns" ? "sub_leak_dns" : "sub_leak_ip") : t("sub_connected", { name: name });
         v.main = t("disconnect"); v.mainAct = "disconnect"; v.sec = t("testConn"); v.secAct = "test"; break;
       case "connecting":
         v.sub = t("sub_connecting", { name: name });
         v.main = t("cancelConnecting"); v.mainAct = "disconnect"; break;
       case "nohandshake":
-        v.sub = t(ks ? "sub_nohandshake_ks" : "sub_nohandshake");
+        v.sub = retrying() ? t(ks ? "sub_retrying" : "sub_retrying_exposed") : t(ks ? "sub_nohandshake_ks" : "sub_nohandshake");
         v.main = t("disconnect"); v.mainAct = "disconnect"; break;
       case "stale":
-        v.sub = t(ks ? "sub_stale_ks" : "sub_stale");
+        v.sub = retrying() ? t(ks ? "sub_retrying" : "sub_retrying_exposed") : t(ks ? "sub_stale_ks" : "sub_stale");
         v.main = t("disconnect"); v.mainAct = "disconnect"; break;
       case "dropped_blocked":
-        v.sub = t("sub_dropped_blocked");
+        v.sub = retrying() ? t("sub_retrying") : t("sub_dropped_blocked");
         v.main = t("reconnect"); v.mainAct = "reconnect"; v.sec = t("disconnect"); v.secAct = "disconnect"; break;
       case "dropped_exposed":
-        v.sub = t("sub_dropped_exposed");
+        v.sub = retrying() ? t("sub_retrying_exposed") : t("sub_dropped_exposed");
         v.main = t("reconnect"); v.mainAct = "reconnect"; v.sec = t("disconnect"); v.secAct = "disconnect"; break;
       case "blocked":
         v.sub = t("sub_blocked");
@@ -401,7 +443,10 @@
       if (st.dns_applied) out.push([t("factDns"), st.dns_applied]);
       out.push([t("factKs"), st.ks_active === "1" ? t("factKsOn") : t("factKsOff")]);
       if (Number(st.handshake_age) >= 0) out.push([t("factHs"), t("factAgo", { n: st.handshake_age })]);
-      if (status === "connected") out.push([t("factTraffic"), "↓ " + bytes(st.rx) + "  ↑ " + bytes(st.tx)]);
+      if (status === "connected") {
+        if (S.leak.ip && S.leak.state !== "checking") out.push([t("factIp"), S.leak.ip + (S.leak.state === "ok" ? " ✓" : ""), S.leak.state === "ok" ? "good" : (S.leak.state === "leak" ? "leak" : "")]);
+        out.push([t("factTraffic"), "↓ " + bytes(st.rx) + "  ↑ " + bytes(st.tx)]);
+      }
     } else if (status === "dropped_blocked" || status === "blocked") {
       out.push([t("factKs"), t("factKsOn")]);
     } else if (status === "dropped_exposed") {
@@ -422,7 +467,7 @@
     setText($("farLabel"), v.farLabel);
 
     var f = facts(), html = "";
-    for (var i = 0; i < f.length; i++) html += '<li><span class="k">' + esc(f[i][0]) + "</span><span>" + esc(f[i][1]) + "</span></li>";
+    for (var i = 0; i < f.length; i++) html += '<li><span class="k">' + esc(f[i][0]) + '</span><span' + (f[i][2] ? ' class="' + f[i][2] + '"' : "") + ">" + esc(f[i][1]) + "</span></li>";
     if ($("facts").getAttribute("data-html") !== html) { $("facts").innerHTML = html; $("facts").setAttribute("data-html", html); }
 
     var main = $("btnMain");
@@ -433,8 +478,32 @@
     var sec = $("btnSecondary");
     sec.hidden = !v.sec; setText(sec, v.sec); sec.setAttribute("data-act", v.secAct);
 
+    renderChip(v.status);
     renderGrid(v.status);
     renderSettings();
+  }
+
+  // Small always-visible indicator in the top bar.
+  function renderChip(status) {
+    var chip = $("chip"), tone = "idle", key = "chipOff", pulse = false;
+    switch (status) {
+      case "setup": case "loading": chip.hidden = true; return;
+      case "connected":
+        if (S.leak.state === "ok") { tone = "ok"; key = "chipProtected"; }
+        else if (S.leak.state === "leak") { tone = "bad"; key = "chipLeak"; }
+        else if (S.leak.state === "checking" || S.leak.state === "none") { tone = "busy"; key = "chipChecking"; }
+        else { tone = "info"; key = "chipConnected"; }
+        break;
+      case "connecting": tone = "busy"; key = "chipConnecting"; break;
+      case "nohandshake": case "stale": tone = "warn"; key = retrying() ? "chipRetrying" : "chipNoReply"; pulse = retrying(); break;
+      case "dropped_blocked": case "blocked": tone = "warn"; key = retrying() ? "chipRetrying" : "chipBlocked"; pulse = retrying(); break;
+      case "dropped_exposed": tone = "bad"; key = retrying() ? "chipRetrying" : "chipExposed"; break;
+      default: tone = "idle"; key = "chipOff";
+    }
+    chip.hidden = false;
+    if (chip.getAttribute("data-tone") !== tone) chip.setAttribute("data-tone", tone);
+    if (pulse) chip.setAttribute("data-pulse", "1"); else chip.removeAttribute("data-pulse");
+    setText($("chipText"), t(key));
   }
 
   function renderGrid(gridStatus) {
@@ -442,7 +511,7 @@
     var activeId = S.busy === "connecting" ? S.busyProfile : S.st.profile;
     var warn = status !== "connected" && status !== "connecting";
     var sig = [lang, activeId, warn ? "w" : "o"];
-    for (var i = 0; i < S.profiles.length; i++) sig.push(S.profiles[i].id + S.profiles[i].name);
+    for (var i = 0; i < S.profiles.length; i++) sig.push(S.profiles[i].id + S.profiles[i].name + (isFav(S.profiles[i].id) ? "*" : ""));
     sig = sig.join("|");
     var empty = S.installed && S.profiles.length === 0;
     $("empty").hidden = !empty;
@@ -456,16 +525,24 @@
 
     var focused = document.activeElement && document.activeElement.getAttribute && document.activeElement.getAttribute("data-id");
     var html = "";
-    for (var j = 0; j < S.profiles.length; j++) {
-      var p = S.profiles[j], d = describe(p);
+    var ordered = [], rest = [];
+    for (var q = 0; q < S.profiles.length; q++) (isFav(S.profiles[q].id) ? ordered : rest).push(S.profiles[q]);
+    var grouped = ordered.length > 0 && rest.length > 0;
+    var nFav = ordered.length;
+    ordered = ordered.concat(rest);
+    for (var j = 0; j < ordered.length; j++) {
+      var p = ordered[j], d = describe(p);
+      if (grouped && j === 0) html += '<div class="group">' + esc(t("favorites")) + "</div>";
+      if (grouped && j === nFav) html += '<div class="group">' + esc(t("allServers")) + "</div>";
       var act = p.id === activeId;
       var tag = act ? (status === "connected" ? t("status_connected") : (status === "connecting" ? "…" : "")) : "";
-      html += '<button class="card' + (act ? " active" : "") + (act && warn ? " warn" : "") + '" data-f data-id="' + esc(p.id) + '" role="listitem">' +
+      html += '<button class="card' + (act ? " active" : "") + (act && warn ? " warn" : "") + (isFav(p.id) ? " fav" : "") + '" data-f data-id="' + esc(p.id) + '" role="listitem">' +
         (d.flag
           ? '<span class="flag"><img src="flags/' + d.cc.toLowerCase() + '.svg" alt="" onerror="this.parentNode.className=\'cc\';this.parentNode.textContent=\'' + d.cc + '\'"></span>'
           : '<span class="cc">' + esc(d.cc) + "</span>") +
         '<span class="city">' + esc(d.city) + "</span>" +
         '<span class="meta">' + esc((d.country ? d.country + (d.num ? " · " : "") : "") + (d.num ? d.num : (d.country ? "" : p.endpoint))) + "</span>" +
+        '<span class="star" data-star aria-hidden="true">' + (isFav(p.id) ? "★" : "☆") + "</span>" +
         (tag ? '<span class="tag">' + esc(tag) + "</span>" : "") + "</button>";
     }
     $("grid").innerHTML = html;
@@ -473,6 +550,18 @@
       var again = document.querySelector('.card[data-id="' + focused + '"]');
       if (again) again.focus();
     }
+  }
+
+  function isFav(id) { return S.favs.indexOf(id) !== -1; }
+  function toggleFav(id) {
+    if (!ID_RE.test(id)) return;
+    var was = isFav(id);
+    if (was) S.favs.splice(S.favs.indexOf(id), 1); else S.favs.push(id);
+    S.sig = ""; render();
+    var again = document.querySelector('.card[data-id="' + id + '"]');
+    if (again) { again.focus(); ensureVisible(again); }
+    showToast(t(was ? "favRemoved" : "favAdded"), true, 2000);
+    sh(scriptPath("profiles.sh") + " fav '" + id + "'", function () { refresh(); }, 15000);
   }
 
   var DNS_MODES = [
@@ -493,6 +582,7 @@
     var i18n = document.querySelectorAll("[data-i18n]");
     for (var i = 0; i < i18n.length; i++) setText(i18n[i], t(i18n[i].getAttribute("data-i18n")));
     $("rowKs").setAttribute("aria-checked", S.settings.killswitch === "1" ? "true" : "false");
+    $("rowRec").setAttribute("aria-checked", S.settings.autoreconnect === "1" ? "true" : "false");
     $("rowLan").setAttribute("aria-checked", S.settings.lan === "1" ? "true" : "false");
     $("rowAuto").setAttribute("aria-checked", S.st.autostart === "1" ? "true" : "false");
     setText($("dnsValue"), dnsLabel(S.settings.dns_mode));
@@ -502,11 +592,11 @@
 
   /* ----------------------------------------------------------------- toast */
   var toastTimer = null;
-  function showToast(msg, good) {
+  function showToast(msg, good, ms) {
     var el = $("toast");
     el.textContent = msg; el.className = "toast" + (good ? " good" : ""); el.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { el.hidden = true; }, 9000);
+    toastTimer = setTimeout(function () { el.hidden = true; }, ms || 9000);
   }
   function errorLines(out) {
     var m = out.match(/^(ERROR|WARNING).*$/gm);
@@ -523,6 +613,14 @@
       else if (rc === 3) showToast(errorLines(out) || t("status_nohandshake"), false);
       refresh();
     }, 90000);
+  }
+
+  // With the kill switch active, turning the VPN off reveals the real IP: ask first.
+  function requestDisconnect() {
+    if (S.busy === "working") return;
+    if (S.st.ks_active !== "1") { disconnect(); return; }
+    var unblock = effectiveStatus() === "blocked";
+    confirmDialog(t(unblock ? "confirmUnblockTitle" : "confirmDisconnectTitle"), t("confirmDisconnectText"), t(unblock ? "unblock" : "disconnect"), disconnect);
   }
 
   function disconnect() {
@@ -546,14 +644,70 @@
     }, 90000);
   }
 
+  /* ----------------------------------------------------------- leak check */
+  function checkCmd() {
+    return scriptPath("check.sh") + "; echo; echo '#DNS'; grep '^nameserver' /etc/resolv.conf 2>/dev/null | awk '{print $2}' | tr '\\n' ' '";
+  }
+  function parseCheck(out) {
+    var parts = out.split("#DNS");
+    var j = null;
+    try { j = JSON.parse(parts[0]); } catch (e) { /* not JSON */ }
+    return { j: j, dns: (parts[1] || "").replace(/^\s+|\s+$/g, ""), raw: parts[0] };
+  }
+  function isMullvad(p) {
+    var m = S.settings.dns_mode;
+    return !!(p && /^10\.64\./.test(p.dns || "")) || m === "mullvad" || m === "ads" || m === "ads_trackers" || m === "ads_trackers_malware";
+  }
+  // "ok" (exits through Mullvad, DNS inside the tunnel), "leak", or "info" (not a Mullvad server: no verdict)
+  function leakVerdict(c) {
+    var applied = (S.st.dns_applied || "").split(/\s+/).filter(Boolean);
+    var ns = c.dns.split(/\s+/).filter(Boolean), dnsBad = false;
+    if (applied.length) for (var i = 0; i < ns.length; i++) if (applied.indexOf(ns[i]) === -1) dnsBad = true;
+    var mull = isMullvad(profileById(S.st.profile));
+    if (mull && c.j.mullvad_exit_ip === false) return { state: "leak", why: "ip" };
+    if (dnsBad) return { state: "leak", why: "dns" };
+    return { state: mull && c.j.mullvad_exit_ip ? "ok" : "info", why: "" };
+  }
+  function leakKey() { return (S.st.profile || "") + "|" + (S.st.wd_count || "0"); }
+  function maybeLeakCheck() {
+    if (effectiveStatus() !== "connected") {
+      if (S.leak.state !== "none" && !S.leak.running) S.leak = { state: "none", key: "", at: 0, running: false, ip: "", why: "" };
+      return;
+    }
+    if (S.leak.running || topModal()) return;
+    if (S.leak.key === leakKey() && Date.now() - S.leak.at < 600000) return;
+    runLeakCheck(leakKey(), 0);
+  }
+  function runLeakCheck(key, attempt) {
+    if (attempt === 0) {
+      S.leak.running = true;
+      if (S.leak.key !== key) S.leak = { state: "checking", key: key, at: 0, running: true, ip: "", why: "" };
+      render();
+    }
+    sh(checkCmd(), function (ok, out) {
+      if (leakKey() !== key || effectiveStatus() !== "connected") { S.leak = { state: "none", key: "", at: 0, running: false, ip: "", why: "" }; render(); return; }
+      var c = parseCheck(out);
+      if (!c.j) {
+        if (attempt < 2) { setTimeout(function () { runLeakCheck(key, attempt + 1); }, 4000); return; }
+        S.leak = { state: "unknown", key: key, at: Date.now(), running: false, ip: "", why: "" };
+      } else {
+        var v = leakVerdict(c);
+        S.leak = { state: v.state, why: v.why, key: key, at: Date.now(), running: false, ip: c.j.ip || "" };
+      }
+      render();
+    }, 25000);
+  }
+
   function testConnection() {
     showInfo(t("testTitle"), "<p class='lead'>" + esc(t("testing")) + "</p>");
-    sh(scriptPath("check.sh") + "; echo; echo '#DNS'; grep '^nameserver' /etc/resolv.conf 2>/dev/null | awk '{print $2}' | tr '\\n' ' '", function (ok, out) {
-      var parts = out.split("#DNS");
-      var dns = (parts[1] || "").replace(/^\s+|\s+$/g, "");
-      var j = null;
-      try { j = JSON.parse(parts[0]); } catch (e) { /* not JSON */ }
-      if (!j) { showInfo(t("testTitle"), "<p class='lead bad'>" + esc(t("testFail")) + "</p>", parts[0]); return; }
+    sh(checkCmd(), function (ok, out) {
+      var c = parseCheck(out), j = c.j, dns = c.dns;
+      if (!j) { showInfo(t("testTitle"), "<p class='lead bad'>" + esc(t("testFail")) + "</p>", c.raw); return; }
+      if (effectiveStatus() === "connected") {
+        var v = leakVerdict(c);
+        S.leak = { state: v.state, why: v.why, key: leakKey(), at: Date.now(), running: false, ip: j.ip || "" };
+        render();
+      }
       var rows = "<div class='result-grid'>" +
         "<span class='k'>" + esc(t("testIp")) + "</span><b>" + esc(j.ip || "?") + "</b>" +
         "<span class='k'>" + esc(t("testPlace")) + "</span><span>" + esc([j.city, j.country].filter(Boolean).join(", ")) + "</span>" +
@@ -642,18 +796,27 @@
   var importTimer = null;
   function openImport() {
     if (S.installed === false) { install(); return; }
+    $("importQr").innerHTML = "";
     setText($("importUrl"), "…"); setText($("importCode"), "…"); setText($("importStatus"), t("importWaiting"));
     openModal("importModal", "btnImportDone");
     sh(scriptPath("upload-start.sh"), function (ok, out, rc) {
       var u = /URL:\s*(\S+)/.exec(out), c = /CODE:\s*(\S+)/.exec(out);
       if (!u || !c) { setText($("importStatus"), t("importFailed") + " " + errorLines(out)); return; }
       setText($("importUrl"), u[1].replace(/^http:\/\//, "")); setText($("importCode"), c[1]);
+      renderQr(u[1] + "/?c=" + c[1]);
       clearInterval(importTimer);
       importTimer = setInterval(function () { refresh(function () {
         var n = S.profiles.length;
         setText($("importStatus"), n === 1 ? t("importCountOne") : t("importCount", { n: n }));
       }); }, 3000);
     }, 20000);
+  }
+  function renderQr(text) {
+    var box = $("importQr");
+    try {
+      var q = qrcode(0, "M"); q.addData(text); q.make();
+      box.innerHTML = q.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+    } catch (e) { box.innerHTML = ""; }
   }
   function closeImport() {
     clearInterval(importTimer); importTimer = null;
@@ -682,7 +845,7 @@
   function act(a) {
     if (!a) return;
     if (a === "install") install();
-    else if (a === "disconnect") disconnect();
+    else if (a === "disconnect") requestDisconnect();
     else if (a === "reconnect") connect(S.st.profile || S.settings.last_profile);
     else if (a === "test") testConnection();
     else if (a === "import") openImport();
@@ -696,6 +859,7 @@
     var id = el.id;
     if (el.classList.contains("card")) {
       var pid = el.getAttribute("data-id");
+      if (e.target.getAttribute && e.target.hasAttribute("data-star")) { toggleFav(pid); return; }
       if (pid === S.st.profile && effectiveStatus() === "connected") return;
       connect(pid); return;
     }
@@ -705,6 +869,7 @@
       closeModal("dnsModal"); setSetting("dns_mode", mode); return;
     }
     switch (id) {
+      case "chip": act("test"); break;
       case "btnMain": act(el.getAttribute("data-act")); break;
       case "btnSecondary": act(el.getAttribute("data-act")); break;
       case "btnImport": case "btnEmptyAdd": openImport(); break;
@@ -714,6 +879,7 @@
       case "btnConfirmNo": closeModal("confirmModal"); break;
       case "btnConfirmYes": closeModal("confirmModal"); if (confirmYes) { var f = confirmYes; confirmYes = null; f(); } break;
       case "rowKs": setSetting("killswitch", S.settings.killswitch === "1" ? "0" : "1"); break;
+      case "rowRec": setSetting("autoreconnect", S.settings.autoreconnect === "1" ? "0" : "1"); break;
       case "rowLan": setSetting("lan", S.settings.lan === "1" ? "0" : "1"); break;
       case "rowAuto": toggleAutostart(); break;
       case "rowDns": openDns(); break;
@@ -804,6 +970,9 @@
     }
     if (code === 403 && !topModal() && a && a.classList && a.classList.contains("card")) { // red key
       e.preventDefault(); deleteProfile(a.getAttribute("data-id")); return;
+    }
+    if (code === 404 && !topModal() && a && a.classList && a.classList.contains("card")) { // green key
+      e.preventDefault(); toggleFav(a.getAttribute("data-id")); return;
     }
     if (typing && (code === 37 || code === 39)) return;
     if (code === 37) { e.preventDefault(); move("left"); }

@@ -2,6 +2,7 @@
 # Removes everything the app created: tunnel, firewall rules, DNS override,
 # autostart hook and ALL stored profiles (they contain private keys).
 . "$(CDPATH= cd -- "$(dirname -- "$(readlink -f "$0" 2>/dev/null || echo "$0")")" && pwd)/common.sh"
+"$HERE/watchdog.sh" stop 2>&1 || true
 "$HERE/disconnect.sh" 2>&1 || true
 "$HERE/upload-stop.sh" 2>&1 || true
 ks_remove
