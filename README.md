@@ -8,6 +8,18 @@ Parte do projeto [webos-wireguard](https://github.com/RodriguezCF/webos-wireguar
 
 ![Ligado](docs/img/ligado.png)
 
+## Capturas de ecrã
+
+Ecrã 1920×1080, como aparece na TV.
+
+| | |
+|---|---|
+| ![Ligado e protegido](docs/img/ligado.png)<br>**Ligado e protegido**: indicador verde, IP verificado | ![Ligação perdida](docs/img/ligacao-perdida.png)<br>**Ligação perdida**: internet bloqueada pelo kill switch |
+| ![A religar](docs/img/a-religar.png)<br>**A religar** sozinho ao mesmo servidor | ![Favoritos](docs/img/favoritos.png)<br>**Favoritos** no topo (tecla verde) |
+| ![Adicionar servidores](docs/img/adicionar-servidores.png)<br>**Adicionar servidores** por QR code | ![Testar ligação](docs/img/testar-ligacao.png)<br>**Testar ligação**: IP, país, saída Mullvad e DNS |
+| ![Definições](docs/img/definicoes.png)<br>**Definições**: kill switch, religar, rede local, DNS | ![Escolher DNS](docs/img/dns.png)<br>**DNS** da Mullvad, com bloqueio de anúncios e mais |
+| ![Confirmar ao desligar](docs/img/confirmar-desligar.png)<br>**Confirmação** antes de expor o IP real | |
+
 ## O que muda em relação ao original
 
 | | webos-wireguard | WebOS VPN |
@@ -167,6 +179,10 @@ app/com.heisenberg.webosvpn/   interface (index.html, css, js) e payload instala
 uploader/                      wgtv: importador, página de envio, resolução de endpoints (Go)
 tests/                         e2e.sh (namespaces), ui.py (Chromium), stubs
 ```
+
+## Aviso
+
+Projeto independente e não oficial: **não é feito, apoiado nem afiliado à Mullvad VPN AB** nem à LG. "Mullvad" e "LG" são marcas dos respetivos titulares e são usadas apenas para indicar compatibilidade. O ícone da app é da responsabilidade do autor do repositório.
 
 ## Licença
 
