@@ -8,5 +8,7 @@
   "vendor": "heisenberg-gig",
   "version": "1.0.0",
   "disableBackHistoryAPI": true,
-  "appDescription": "WireGuard VPN with multiple servers, Mullvad DNS and a kill switch for rooted LG webOS TVs"
+  "appDescription": "WireGuard VPN with multiple servers, Mullvad DNS and a kill switch for rooted LG webOS TVs",
+  "noSplashOnLaunch": true,
+  "spinnerOnLaunch": false
 }

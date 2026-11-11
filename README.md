@@ -1,3 +1,5 @@
+<img src="docs/img/icon.png" width="96" align="right" alt="">
+
 # WebOS VPN
 
 Cliente WireGuard para TVs LG webOS com root (Homebrew Channel), pensado para a Mullvad: **vários servidores**, **DNS da Mullvad** e **kill switch**.
