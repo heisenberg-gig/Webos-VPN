@@ -135,7 +135,7 @@ As regras de firewall não sobrevivem a um reinício. Com o início automático 
 
 - 9 testes do importador e da página de envio (formato Mullvad, comentários, maiúsculas, chaves inválidas, ZIP, caminhos maliciosos, vários ficheiros por envio, sessão por código).
 - 69 verificações de ponta a ponta com **tráfego real** entre dois *network namespaces* (a "TV" e a "Internet"), com `iptables`, rotas, `mount` e `resolv.conf` verdadeiros. Entre elas: nada chega à Internet quando o túnel cai; durante uma troca de servidor, com sondas a cada 20 ms, **nenhum pacote saiu fora do túnel**; o DNS não vai em claro; a reconexão automática volta sozinha **sem nenhum pacote fora do túnel** durante a queda; tudo é restaurado ao desligar.
-- 70 verificações da interface num Chromium a 1920×1080: estados, bandeiras, rolagem das definições, foco do comando, tecla Voltar e vermelha, comandos enviados à TV.
+- 76 verificações da interface num Chromium a 1920×1080: estados, bandeiras, rolagem das definições, foco do comando, tecla Voltar e vermelha, comandos enviados à TV.
 
 **Não testado:**
 

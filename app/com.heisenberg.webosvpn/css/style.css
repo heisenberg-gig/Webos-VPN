@@ -168,7 +168,7 @@ input[data-f]:focus{outline-offset:2px}
 .custom-box{margin-top:26px;display:flex;flex-direction:column;gap:14px}
 .custom-box label{font-size:24px;color:var(--muted)}
 input[type=text]{font:inherit;font-size:30px;color:var(--text);background:#000;border:2px solid var(--line);border-radius:16px;padding:16px 22px}
-.log{margin-top:22px;max-height:46vh;overflow:auto;background:#000;border:2px solid var(--line);border-radius:18px;padding:20px 24px;font-family:"Courier New",monospace;font-size:19px;line-height:1.35;white-space:pre-wrap;word-break:break-all;color:#c6ced9}
+.log{margin-top:22px;max-height:52vh;overflow:auto;background:#000;border:2px solid var(--line);border-radius:18px;padding:20px 24px;font-family:"Courier New",monospace;font-size:19px;line-height:1.35;white-space:pre-wrap;word-break:break-all;color:#c6ced9}
 .result-grid{display:grid;grid-template-columns:auto 1fr;gap:12px 36px;font-size:30px;margin-top:10px}
 .result-grid .k{margin:0;align-self:center}
 .ok{color:var(--ice)} .bad{color:var(--amber)}

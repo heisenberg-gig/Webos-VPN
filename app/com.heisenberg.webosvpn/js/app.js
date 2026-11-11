@@ -782,8 +782,10 @@
     setText($("infoTitle"), title);
     $("infoBody").innerHTML = html || "";
     var pre = $("infoLog");
-    if (log) { pre.textContent = log; pre.hidden = false; } else { pre.hidden = true; }
+    if (log) { pre.textContent = log; pre.hidden = false; pre.scrollTop = 0; } else { pre.hidden = true; }
     if ($("infoModal").hidden) openModal("infoModal", "btnInfoClose");
+    // a long log must be scrollable with the remote: focus it so Up/Down scroll it
+    if (log && pre.scrollHeight > pre.clientHeight) pre.focus();
   }
 
   var confirmYes = null;
@@ -973,6 +975,11 @@
     }
     if (code === 404 && !topModal() && a && a.classList && a.classList.contains("card")) { // green key
       e.preventDefault(); toggleFav(a.getAttribute("data-id")); return;
+    }
+    if (a && a.id === "infoLog" && (code === 38 || code === 40 || code === 33 || code === 34)) { // scroll the log
+      var dir = (code === 38 || code === 33) ? -1 : 1;
+      var atEnd = dir > 0 ? a.scrollTop + a.clientHeight >= a.scrollHeight - 2 : a.scrollTop <= 0;
+      if (!atEnd) { e.preventDefault(); a.scrollTop += dir * ((code === 33 || code === 34) ? a.clientHeight * 0.9 : 120); return; }
     }
     if (typing && (code === 37 || code === 39)) return;
     if (code === 37) { e.preventDefault(); move("left"); }
